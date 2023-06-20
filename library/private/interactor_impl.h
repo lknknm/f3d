@@ -83,6 +83,11 @@ public:
    */
   void UpdateRendererAfterInteraction();
 
+  /**
+   * Set the view orbit position on the viewport.
+   */
+  virtual void setViewOrbit(const std::string& file) = 0;
+
 private:
   class internals;
   std::unique_ptr<internals> Internals;
