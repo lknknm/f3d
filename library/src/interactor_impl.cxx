@@ -32,31 +32,6 @@
 
 namespace f3d::detail
 {
-  //----------------------------------------------------------------------------
-  // Method defined to normalize the Z axis so all models are treated temporarily
-  // as Z-up axis models. 
-  vtkNew<vtkTransform> zUpTransform(vtkRenderer* renderer)
-  {
-    const double* up = renderer->GetEnvironmentUp();
-    const double* right = renderer->GetEnvironmentRight();
-    double fwd[3];
-    vtkMath::Cross(right, up, fwd);
-
-    const double m[16] = {
-      right[0], right[1], right[2], 0, //
-      fwd[0], fwd[1], fwd[2], 0,       //
-      up[0], up[1], up[2], 0,          //
-      0, 0, 0, 1,                      //
-    };
-    vtkNew<vtkTransform> toZup;
-    toZup->SetMatrix(m);
-    return toZup;
-  }
-  vtkNew<vtkTransform> zUpTransform(vtkRenderWindowInteractor* interactor)
-  {
-    return zUpTransform(interactor->GetRenderWindow()->GetRenderers()->GetFirstRenderer());
-  }
-
   class interactor_impl::internals
   {
   public:
@@ -100,6 +75,77 @@ namespace f3d::detail
 #endif
   }
 
+  //----------------------------------------------------------------------------
+  // Method defined to normalize the Z axis so all models are treated temporarily
+  // as Z-up axis models. 
+  static vtkNew<vtkTransform> zUpTransform(vtkRenderer* renderer, vtkTransform* transform)
+  {
+    const double* up = renderer->GetEnvironmentUp();
+    const double* right = renderer->GetEnvironmentRight();
+    double fwd[3];
+    vtkMath::Cross(right, up, fwd);
+
+    const double m[16] = {
+      right[0], right[1], right[2], 0, //
+      fwd[0],   fwd[1],   fwd[2],   0, //
+      up[0],    up[1],    up[2],    0, //
+      0,        0,        0,        1, //
+    };
+    vtkNew<vtkTransform> toZup;
+    toZup->SetMatrix(m);
+    return toZup;
+  }
+
+  //----------------------------------------------------------------------------
+  // Set the view orbit position on the viewport.
+  enum class ViewType { VT_FRONT, VT_RIGHT, VT_TOP, VT_ISOMETRIC };
+  static void setViewOrbit(ViewType view, internals* self)
+  {
+    vtkNew<vtkTransform> transform;
+    const auto toZup = zUpTransform(self->VTKInteractor->GetRenderWindow()->GetRenderers()->GetFirstRenderer(), transform);
+    const auto fromZup = toZup->GetInverse();
+    camera& cam = self->Window.getCamera();
+    vector3_t up = { 0, 0, 1 };
+    point3_t pos = cam.getPosition();
+    point3_t foc = cam.getFocalPoint();
+    point3_t A, newPos;
+
+    /* convert coords to +Z up */
+    toZup->TransformPoint(pos.data(), pos.data());
+    toZup->TransformPoint(foc.data(), foc.data());
+
+    const double dx = foc[0] - pos[0]; 
+    const double dy = foc[1] - pos[1]; 
+    const double dz = foc[2] - pos[2]; 
+    double radius = sqrt(dx * dx + dy * dy + dz * dz);
+    switch(view) 
+    {
+      case ViewType::VT_FRONT:
+        A = { 0, 0, 1 }; break;
+      case ViewType::VT_RIGHT:
+        A = { 1, 0, 0 }; break;
+      case ViewType::VT_TOP:
+        A = { 0, 1, 0 }; break;
+      case ViewType::VT_ISOMETRIC:
+        A = { -1, 1, 1 }; break;
+    }
+
+    fromZup->TransformPoint(A.data(), A.data());
+    newPos[0] = foc[0] + radius * A[0];
+    newPos[1] = foc[1] + radius * A[1];
+    newPos[2] = foc[2] + radius * A[2];
+
+    /* convert coordinatess back to whatever up is according to model/options */
+    fromZup->TransformPoint(newPos.data(), newPos.data());
+    fromZup->TransformPoint(foc.data(), foc.data());
+    fromZup->TransformPoint(up.data(), up.data());
+
+    /* set camera coordinates back */
+    cam.setPosition(newPos);
+    cam.setViewUp(up);
+    cam.resetToBounds(0.9);
+  }
+
   static void OnKeyPress(vtkObject*, unsigned long, void* clientData, void*)
   {
     internals* self = static_cast<internals*>(clientData);
@@ -123,17 +169,6 @@ namespace f3d::detail
     vtkF3DRendererWithColoring* renWithColor = vtkF3DRendererWithColoring::SafeDownCast(ren);
     bool checkColoring = false;
     bool render = false;
-
-    // Declaring variables for camera shortcuts
-    const auto toZup = zUpTransform(self->VTKInteractor);
-    const auto fromZup = toZup->GetInverse();
-    camera& cam = self->Window.getCamera();
-    vector3_t up = {0, 0, 1};
-    point3_t pos = cam.getPosition();
-    point3_t foc = cam.getFocalPoint();
-    point3_t A;
-    point3_t newPos;
-    double dx, dy, dz, radius;
 
     switch (keyCode)
     {
@@ -272,67 +307,20 @@ namespace f3d::detail
         self->Window.PrintSceneDescription(log::VerboseLevel::INFO);
         break;
       case '1':
-        log::info("--------------------------");
-        log::info("Debug: Front View");
-        log::info("cam pos = ", pos[0], " ", pos[1], " ", pos[2]);
-        log::info("cam foc = ", foc[0], " ", foc[1], " ", foc[2]);
-
-        self->setViewOrbit("Front");
+        self->setViewOrbit(ViewType::VT_FRONT, self);
         render = true;
-
-        log::info("cam radius = ", radius);
-        log::info("cam A = ", A[0], " ", A[1], " ", A[2]);
-        log::info("cam newPos = ", newPos[0], " ", newPos[1], " ", newPos[2]);
-        log::info("--------------------------");
         break;
       case '3':
-        log::info("--------------------------");
-        log::info("Debug: Right View");
-        log::info("cam pos = ", pos[0], " ", pos[1], " ", pos[2]);
-        log::info("cam foc = ", foc[0], " ", foc[1], " ", foc[2]);
-
-        dx = foc[0] - pos[0]; 
-        dy = foc[1] - pos[1]; 
-        dz = foc[2] - pos[2]; 
-        radius = sqrt(dx*dx + dy*dy + dz*dz);
-        A = {1, 0, 0};
-        newPos[0] = foc[0] + radius * A[0];
-        newPos[1] = foc[1] + radius * A[1];
-        newPos[2] = foc[2] + radius * A[2];
-        cam.setPosition(newPos);
-        cam.setViewUp({0, 1, 0 });
-        cam.resetToBounds();
+        self->setViewOrbit(ViewType::VT_RIGHT, self);
         render = true;
-
-        log::info("cam radius = ", radius);
-        log::info("cam A = ", A[0], " ", A[1], " ", A[2]);
-        log::info("cam newPos = ", newPos[0], " ", newPos[1], " ", newPos[2]);
-        log::info("--------------------------");
-
         break;
       case '7':
-        log::info("--------------------------");
-        log::info("Debug: Right View");
-        log::info("cam pos = ", pos[0], " ", pos[1], " ", pos[2]);
-        log::info("cam foc = ", foc[0], " ", foc[1], " ", foc[2]);
-
-        dx = foc[0] - pos[0]; 
-        dy = foc[1] - pos[1]; 
-        dz = foc[2] - pos[2]; 
-        radius = sqrt(dx*dx + dy*dy + dz*dz);
-        A = {0, 1, 0};
-        newPos[0] = foc[0] + radius * A[0];
-        newPos[1] = foc[1] + radius * A[1];
-        newPos[2] = foc[2] + radius * A[2];
-        cam.setPosition(newPos);
-        cam.setViewUp({0, 0, -1});
-        cam.resetToBounds();
+        self->setViewOrbit(ViewType::VT_TOP, self);
         render = true;
-
-        log::info("cam radius = ", radius);
-        log::info("cam A = ", A[0], " ", A[1], " ", A[2]);
-        log::info("cam newPos = ", newPos[0], " ", newPos[1], " ", newPos[2]);
-        log::info("--------------------------");
+        break;
+      case '9':
+        self->setViewOrbit(ViewType::VT_ISOMETRIC, self);
+        render = true;
         break;
       default:
         if (keySym == F3D_EXIT_HOTKEY_SYM)
@@ -723,48 +711,4 @@ void interactor_impl::UpdateRendererAfterInteraction()
   this->Internals->Style->UpdateRendererAfterInteraction();
 }
 
-//----------------------------------------------------------------------------
-void interactor_impl::setViewOrbit(const std::string& view)
-{
-  const auto toZup = zUpTransform(self->VTKInteractor);
-  const auto fromZup = toZup->GetInverse();
-  camera& cam = self->Window.getCamera();
-  vector3_t up = {0, 0, 1};
-  point3_t pos = cam.getPosition();
-  point3_t foc = cam.getFocalPoint();
-  point3_t A;
-
-  /* convert coords to +Z up */
-  toZup->TransformPoint(pos.data(), pos.data());
-  toZup->TransformPoint(foc.data(), foc.data());
-
-  const double dx = foc[0] - pos[0]; 
-  const double dy = foc[1] - pos[1]; 
-  const double dz = foc[2] - pos[2]; 
-  double radius = sqrt(dx*dx + dy*dy + dz*dz);
-
-  switch(view) 
-    {
-      case 'Front':
-        A = {0, 0, 1};
-      case 'Right':
-        A = {1, 0, 0};
-      case 'Top':
-        A = {0, 1, 0};
-    }
-  fromZup->TransformPoint(A.data(), A.data());
-  point3_t newPos[0] = foc[0] + radius * A[0];
-  point3_t newPos[1] = foc[1] + radius * A[1];
-  point3_t newPos[2] = foc[2] + radius * A[2];
-
-  /* convert coords back to whatever up is according to model/options */
-  fromZup->TransformPoint(newPos.data(), newPos.data());
-  fromZup->TransformPoint(foc.data(), foc.data());
-  fromZup->TransformPoint(up.data(), up.data());
-
-  /* set camera coordinates back */
-  cam.setPosition(newPos);
-  cam.setViewUp(up);
-  cam.resetToBounds(0.9);
-}
 }
