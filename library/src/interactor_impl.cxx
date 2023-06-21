@@ -121,13 +121,13 @@ namespace f3d::detail
     switch(view) 
     {
       case ViewType::VT_FRONT:
-        A = { 0, 0, 1 }; break;
+        A = { 0, 0, 1 };  fromZup->TransformPoint(up.data(), up.data()); break;
       case ViewType::VT_RIGHT:
-        A = { 1, 0, 0 }; break;
+        A = { 1, 0, 0 };  fromZup->TransformPoint(up.data(), up.data()); break;
       case ViewType::VT_TOP:
         A = { 0, 1, 0 }; break;
       case ViewType::VT_ISOMETRIC:
-        A = { -1, 1, 1 }; break;
+        A = { -1, 1, 1 }; fromZup->TransformPoint(up.data(), up.data()); break;
     }
 
     fromZup->TransformPoint(A.data(), A.data());
@@ -138,7 +138,6 @@ namespace f3d::detail
     /* convert coordinatess back to whatever up is according to model/options */
     fromZup->TransformPoint(newPos.data(), newPos.data());
     fromZup->TransformPoint(foc.data(), foc.data());
-    fromZup->TransformPoint(up.data(), up.data());
 
     /* set camera coordinates back */
     cam.setPosition(newPos);
