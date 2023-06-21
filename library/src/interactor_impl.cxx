@@ -98,7 +98,7 @@ namespace f3d::detail
 
   //----------------------------------------------------------------------------
   // Set the view orbit position on the viewport.
-  enum class ViewType { VT_FRONT, VT_RIGHT, VT_TOP, VT_ISOMETRIC };
+  enum class ViewType { VT_FRONT, VT_BACK, VT_RIGHT, VT_LEFT, VT_TOP, VT_ISOMETRIC };
   static void setViewOrbit(ViewType view, internals* self)
   {
     vtkNew<vtkTransform> transform;
@@ -122,8 +122,12 @@ namespace f3d::detail
     {
       case ViewType::VT_FRONT:
         A = { 0, 0, 1 };  fromZup->TransformPoint(up.data(), up.data()); break;
+      case ViewType::VT_BACK:
+        A = { 0, 0, -1 }; fromZup->TransformPoint(up.data(), up.data()); break;
       case ViewType::VT_RIGHT:
         A = { 1, 0, 0 };  fromZup->TransformPoint(up.data(), up.data()); break;
+      case ViewType::VT_LEFT:
+        A = { -1, 0, 0 }; fromZup->TransformPoint(up.data(), up.data()); break;
       case ViewType::VT_TOP:
         A = { 0, 1, 0 }; break;
       case ViewType::VT_ISOMETRIC:
@@ -149,7 +153,7 @@ namespace f3d::detail
   {
     internals* self = static_cast<internals*>(clientData);
     vtkRenderWindowInteractor* rwi = self->Style->GetInteractor();
-    int keyCode = std::toupper(rwi->GetKeyCode());
+    int keyCode = std::toupper(rwi->GetKeyCode());;
     std::string keySym = rwi->GetKeySym();
     if (keySym.length() > 0)
     {
