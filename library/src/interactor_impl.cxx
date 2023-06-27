@@ -78,22 +78,22 @@ namespace f3d::detail
   //----------------------------------------------------------------------------
   // Method defined to normalize the Z axis so all models are treated temporarily
   // as Z-up axis models. 
-  static vtkNew<vtkTransform> zUpTransform(vtkRenderer* renderer, vtkTransform* transform)
+  void zUpTransforms(vtkTransform* to, vtkTransform* from)
   {
+    vtkRenderer* renderer = this->VTKInteractor->GetRenderWindow()->GetRenderers()->GetFirstRenderer();
     const double* up = renderer->GetEnvironmentUp();
     const double* right = renderer->GetEnvironmentRight();
     double fwd[3];
     vtkMath::Cross(right, up, fwd);
-
     const double m[16] = {
       right[0], right[1], right[2], 0, //
       fwd[0],   fwd[1],   fwd[2],   0, //
       up[0],    up[1],    up[2],    0, //
       0,        0,        0,        1, //
     };
-    vtkNew<vtkTransform> toZup;
-    toZup->SetMatrix(m);
-    return toZup;
+    to->SetMatrix(m);
+    from->SetMatrix(m);
+    from->Inverse();
   }
 
   //----------------------------------------------------------------------------
@@ -101,9 +101,8 @@ namespace f3d::detail
   enum class ViewType { VT_FRONT, VT_BACK, VT_RIGHT, VT_LEFT, VT_TOP, VT_ISOMETRIC };
   static void setViewOrbit(ViewType view, internals* self)
   {
-    vtkNew<vtkTransform> transform;
-    const auto toZup = zUpTransform(self->VTKInteractor->GetRenderWindow()->GetRenderers()->GetFirstRenderer(), transform);
-    const auto fromZup = toZup->GetInverse();
+    vtkNew<vtkTransform> toZup, fromZup;
+    self->zUpTransforms(toZup, fromZup);
     camera& cam = self->Window.getCamera();
     vector3_t up = { 0, 0, 1 };
     point3_t pos = cam.getPosition();
@@ -153,7 +152,7 @@ namespace f3d::detail
   {
     internals* self = static_cast<internals*>(clientData);
     vtkRenderWindowInteractor* rwi = self->Style->GetInteractor();
-    int keyCode = std::toupper(rwi->GetKeyCode());;
+    int keyCode = std::toupper(rwi->GetKeyCode());
     std::string keySym = rwi->GetKeySym();
     if (keySym.length() > 0)
     {
