@@ -974,6 +974,7 @@ void vtkF3DRenderer::ConfigureCheatSheet()
     cheatSheetText << " 7: Top View camera\n";
     cheatSheetText << " 9: Isometric View camera\n";
     cheatSheetText << " ENTER: Reset camera to initial parameters\n";
+    cheatSheetText << " Drop  : Load dropped file, folder or HDRI\n";
 
     this->CheatSheetActor->SetText(vtkCornerAnnotation::LeftEdge, cheatSheetText.str().c_str());
     this->CheatSheetActor->RenderOpaqueGeometry(this);
