@@ -14,15 +14,16 @@
 #include <vtkCellPicker.h>
 #include <vtkMath.h>
 #include <vtkNew.h>
+#include <vtkPicker.h>
 #include <vtkPointPicker.h>
 #include <vtkRenderWindow.h>
 #include <vtkRenderWindowInteractor.h>
 #include <vtkRendererCollection.h>
 #include <vtkStringArray.h>
+#include <vtkTransform.h>
 #include <vtkVersion.h>
 #include <vtksys/SystemTools.hxx>
-#include <vtkPicker.h>
-#include <vtkTransform.h>
+
 
 #include <chrono>
 #include <cmath>
@@ -32,9 +33,9 @@
 
 namespace f3d::detail
 {
-  class interactor_impl::internals
-  {
-  public:
+class interactor_impl::internals
+{
+public:
   internals(options& options, window_impl& window, loader_impl& loader)
     : Options(options)
     , Window(window)
@@ -77,19 +78,20 @@ namespace f3d::detail
 
   //----------------------------------------------------------------------------
   // Method defined to normalize the Z axis so all models are treated temporarily
-  // as Z-up axis models. 
+  // as Z-up axis models.
   void zUpTransforms(vtkTransform* to, vtkTransform* from)
   {
-    vtkRenderer* renderer = this->VTKInteractor->GetRenderWindow()->GetRenderers()->GetFirstRenderer();
+    vtkRenderer* renderer =
+      this->VTKInteractor->GetRenderWindow()->GetRenderers()->GetFirstRenderer();
     const double* up = renderer->GetEnvironmentUp();
     const double* right = renderer->GetEnvironmentRight();
     double fwd[3];
     vtkMath::Cross(right, up, fwd);
     const double m[16] = {
       right[0], right[1], right[2], 0, //
-      fwd[0],   fwd[1],   fwd[2],   0, //
-      up[0],    up[1],    up[2],    0, //
-      0,        0,        0,        1, //
+      fwd[0], fwd[1], fwd[2], 0,       //
+      up[0], up[1], up[2], 0,          //
+      0, 0, 0, 1,                      //
     };
     to->SetMatrix(m);
     from->SetMatrix(m);
@@ -98,8 +100,16 @@ namespace f3d::detail
 
   //----------------------------------------------------------------------------
   // Set the view orbit position on the viewport.
-  enum class ViewType { VT_FRONT, VT_BACK, VT_RIGHT, VT_LEFT, VT_TOP, VT_ISOMETRIC };
-  static void setViewOrbit(ViewType view, internals* self)
+  enum class ViewType
+  {
+    VT_FRONT,
+    VT_BACK,
+    VT_RIGHT,
+    VT_LEFT,
+    VT_TOP,
+    VT_ISOMETRIC
+  };
+  static void SetViewOrbit(ViewType view, internals* self)
   {
     vtkNew<vtkTransform> toZup, fromZup;
     self->zUpTransforms(toZup, fromZup);
@@ -107,38 +117,49 @@ namespace f3d::detail
     vector3_t up = { 0, 0, 1 };
     point3_t pos = cam.getPosition();
     point3_t foc = cam.getFocalPoint();
-    point3_t A, newPos;
+    point3_t Axis, newPos;
 
     /* convert coords to +Z up */
     toZup->TransformPoint(pos.data(), pos.data());
     toZup->TransformPoint(foc.data(), foc.data());
 
-    const double dx = foc[0] - pos[0]; 
-    const double dy = foc[1] - pos[1]; 
-    const double dz = foc[2] - pos[2]; 
+    const double dx = foc[0] - pos[0];
+    const double dy = foc[1] - pos[1];
+    const double dz = foc[2] - pos[2];
     double radius = sqrt(dx * dx + dy * dy + dz * dz);
-    switch(view) 
+    switch (view)
     {
       case ViewType::VT_FRONT:
-        A = { 0, 0, 1 };  fromZup->TransformPoint(up.data(), up.data()); break;
+        Axis = { 0, 0, 1 };
+        fromZup->TransformPoint(up.data(), up.data());
+        break;
       case ViewType::VT_BACK:
-        A = { 0, 0, -1 }; fromZup->TransformPoint(up.data(), up.data()); break;
+        Axis = { 0, 0, -1 };
+        fromZup->TransformPoint(up.data(), up.data());
+        break;
       case ViewType::VT_RIGHT:
-        A = { 1, 0, 0 };  fromZup->TransformPoint(up.data(), up.data()); break;
+        Axis = { 1, 0, 0 };
+        fromZup->TransformPoint(up.data(), up.data());
+        break;
       case ViewType::VT_LEFT:
-        A = { -1, 0, 0 }; fromZup->TransformPoint(up.data(), up.data()); break;
+        Axis = { -1, 0, 0 };
+        fromZup->TransformPoint(up.data(), up.data());
+        break;
       case ViewType::VT_TOP:
-        A = { 0, 1, 0 }; break;
+        Axis = { 0, 1, 0 };
+        break;
       case ViewType::VT_ISOMETRIC:
-        A = { -1, 1, 1 }; fromZup->TransformPoint(up.data(), up.data()); break;
+        Axis = { -1, 1, 1 };
+        fromZup->TransformPoint(up.data(), up.data());
+        break;
     }
 
-    fromZup->TransformPoint(A.data(), A.data());
-    newPos[0] = foc[0] + radius * A[0];
-    newPos[1] = foc[1] + radius * A[1];
-    newPos[2] = foc[2] + radius * A[2];
+    fromZup->TransformPoint(Axis.data(), Axis.data());
+    newPos[0] = foc[0] + radius * Axis[0];
+    newPos[1] = foc[1] + radius * Axis[1];
+    newPos[2] = foc[2] + radius * Axis[2];
 
-    /* convert coordinatess back to whatever up is according to model/options */
+    /* convert coordinates back to whatever up is according to model/options */
     fromZup->TransformPoint(newPos.data(), newPos.data());
     fromZup->TransformPoint(foc.data(), foc.data());
 
@@ -165,12 +186,6 @@ namespace f3d::detail
     {
       return;
     }
-    log::info("keyCode: ", keyCode);
-    log::info("keySym: ", keySym);
-    log::info("AltKey: ", rwi->GetAltKey());
-    log::info("ShiftKey: ", rwi->GetShiftKey());
-    log::info("ControlKey: ", rwi->GetControlKey());
-    log::info("\n");
 
     // No user defined behavior, use standard behavior
     vtkRenderWindow* renWin = self->Window.GetRenderWindow();
@@ -317,20 +332,20 @@ namespace f3d::detail
         break;
       case '1':
       {
-        self->setViewOrbit(ViewType::VT_FRONT, self);
+        self->SetViewOrbit(ViewType::VT_FRONT, self);
         render = true;
         break;
       }
       case '3':
-        self->setViewOrbit(ViewType::VT_RIGHT, self);
+        self->SetViewOrbit(ViewType::VT_RIGHT, self);
         render = true;
         break;
       case '7':
-        self->setViewOrbit(ViewType::VT_TOP, self);
+        self->SetViewOrbit(ViewType::VT_TOP, self);
         render = true;
         break;
       case '9':
-        self->setViewOrbit(ViewType::VT_ISOMETRIC, self);
+        self->SetViewOrbit(ViewType::VT_ISOMETRIC, self);
         render = true;
         break;
       default:
@@ -499,10 +514,7 @@ namespace f3d::detail
   std::function<bool(const std::vector<std::string>&)> DropFilesUserCallBack =
     [](const std::vector<std::string>&) { return false; };
 
-  void StartInteractor()
-  {
-    this->VTKInteractor->Start();
-  }
+  void StartInteractor() { this->VTKInteractor->Start(); }
 
   void StopInteractor()
   {
@@ -710,6 +722,7 @@ void interactor_impl::SetAnimationManager(animationManager* manager)
 {
   this->Internals->AnimationManager = manager;
 }
+
 //----------------------------------------------------------------------------
 void interactor_impl::SetInteractorOn(vtkInteractorObserver* observer)
 {
@@ -721,5 +734,4 @@ void interactor_impl::UpdateRendererAfterInteraction()
 {
   this->Internals->Style->UpdateRendererAfterInteraction();
 }
-
 }
