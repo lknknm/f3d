@@ -24,7 +24,6 @@
 #include <vtkVersion.h>
 #include <vtksys/SystemTools.hxx>
 
-
 #include <chrono>
 #include <cmath>
 #include <map>
