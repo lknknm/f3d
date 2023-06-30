@@ -150,6 +150,7 @@ namespace f3d::detail
 
   static void OnKeyPress(vtkObject*, unsigned long, void* clientData, void*)
   {
+
     internals* self = static_cast<internals*>(clientData);
     vtkRenderWindowInteractor* rwi = self->Style->GetInteractor();
     int keyCode = std::toupper(rwi->GetKeyCode());
@@ -164,6 +165,12 @@ namespace f3d::detail
     {
       return;
     }
+    log::info("keyCode: ", keyCode);
+    log::info("keySym: ", keySym);
+    log::info("AltKey: ", rwi->GetAltKey());
+    log::info("ShiftKey: ", rwi->GetShiftKey());
+    log::info("ControlKey: ", rwi->GetControlKey());
+    log::info("\n");
 
     // No user defined behavior, use standard behavior
     vtkRenderWindow* renWin = self->Window.GetRenderWindow();
@@ -309,9 +316,11 @@ namespace f3d::detail
         self->Window.PrintSceneDescription(log::VerboseLevel::INFO);
         break;
       case '1':
+      {
         self->setViewOrbit(ViewType::VT_FRONT, self);
         render = true;
         break;
+      }
       case '3':
         self->setViewOrbit(ViewType::VT_RIGHT, self);
         render = true;
