@@ -13,6 +13,7 @@
 #include <vtkCallbackCommand.h>
 #include <vtkCellPicker.h>
 #include <vtkMath.h>
+#include <vtkMatrix3x3.h>
 #include <vtkNew.h>
 #include <vtkPicker.h>
 #include <vtkPointPicker.h>
@@ -22,7 +23,6 @@
 #include <vtkStringArray.h>
 #include <vtkVersion.h>
 #include <vtksys/SystemTools.hxx>
-#include <vtkMatrix3x3.h>
 
 #include <chrono>
 #include <cmath>
