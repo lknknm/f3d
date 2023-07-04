@@ -329,11 +329,9 @@ public:
         self->Window.PrintSceneDescription(log::VerboseLevel::INFO);
         break;
       case '1':
-      {
         self->SetViewOrbit(ViewType::VT_FRONT, self);
         render = true;
         break;
-      }
       case '3':
         self->SetViewOrbit(ViewType::VT_RIGHT, self);
         render = true;
