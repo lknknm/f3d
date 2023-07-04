@@ -20,9 +20,9 @@
 #include <vtkRenderWindowInteractor.h>
 #include <vtkRendererCollection.h>
 #include <vtkStringArray.h>
-#include <vtkTransform.h>
 #include <vtkVersion.h>
 #include <vtksys/SystemTools.hxx>
+#include <vtkMatrix3x3.h>
 
 #include <chrono>
 #include <cmath>
@@ -78,7 +78,7 @@ public:
   //----------------------------------------------------------------------------
   // Method defined to normalize the Z axis so all models are treated temporarily
   // as Z-up axis models.
-  void zUpTransforms(vtkTransform* to, vtkTransform* from)
+  void zUpTransforms(vtkMatrix3x3* to, vtkMatrix3x3* from)
   {
     vtkRenderer* renderer =
       this->VTKInteractor->GetRenderWindow()->GetRenderers()->GetFirstRenderer();
@@ -86,15 +86,14 @@ public:
     const double* right = renderer->GetEnvironmentRight();
     double fwd[3];
     vtkMath::Cross(right, up, fwd);
-    const double m[16] = {
-      right[0], right[1], right[2], 0, //
-      fwd[0], fwd[1], fwd[2], 0,       //
-      up[0], up[1], up[2], 0,          //
-      0, 0, 0, 1,                      //
+    const double m[9] = {
+      right[0], right[1], right[2], //
+      fwd[0], fwd[1], fwd[2],       //
+      up[0], up[1], up[2],          //
     };
-    to->SetMatrix(m);
-    from->SetMatrix(m);
-    from->Inverse();
+    to->DeepCopy(m);
+    from->DeepCopy(m);
+    from->Transpose();
   }
 
   //----------------------------------------------------------------------------
@@ -110,7 +109,7 @@ public:
   };
   static void SetViewOrbit(ViewType view, internals* self)
   {
-    vtkNew<vtkTransform> toZup, fromZup;
+    vtkNew<vtkMatrix3x3> toZup, fromZup;
     self->zUpTransforms(toZup, fromZup);
     camera& cam = self->Window.getCamera();
     vector3_t up = { 0, 0, 1 };
@@ -119,8 +118,8 @@ public:
     point3_t Axis, newPos;
 
     /* convert coords to +Z up */
-    toZup->TransformPoint(pos.data(), pos.data());
-    toZup->TransformPoint(foc.data(), foc.data());
+    toZup->MultiplyPoint(pos.data(), pos.data());
+    toZup->MultiplyPoint(foc.data(), foc.data());
 
     const double dx = foc[0] - pos[0];
     const double dy = foc[1] - pos[1];
@@ -130,37 +129,37 @@ public:
     {
       case ViewType::VT_FRONT:
         Axis = { 0, 0, 1 };
-        fromZup->TransformPoint(up.data(), up.data());
+        fromZup->MultiplyPoint(up.data(), up.data());
         break;
       case ViewType::VT_BACK:
         Axis = { 0, 0, -1 };
-        fromZup->TransformPoint(up.data(), up.data());
+        fromZup->MultiplyPoint(up.data(), up.data());
         break;
       case ViewType::VT_RIGHT:
         Axis = { 1, 0, 0 };
-        fromZup->TransformPoint(up.data(), up.data());
+        fromZup->MultiplyPoint(up.data(), up.data());
         break;
       case ViewType::VT_LEFT:
         Axis = { -1, 0, 0 };
-        fromZup->TransformPoint(up.data(), up.data());
+        fromZup->MultiplyPoint(up.data(), up.data());
         break;
       case ViewType::VT_TOP:
         Axis = { 0, 1, 0 };
         break;
       case ViewType::VT_ISOMETRIC:
         Axis = { -1, 1, 1 };
-        fromZup->TransformPoint(up.data(), up.data());
+        fromZup->MultiplyPoint(up.data(), up.data());
         break;
     }
 
-    fromZup->TransformPoint(Axis.data(), Axis.data());
+    fromZup->MultiplyPoint(Axis.data(), Axis.data());
     newPos[0] = foc[0] + radius * Axis[0];
     newPos[1] = foc[1] + radius * Axis[1];
     newPos[2] = foc[2] + radius * Axis[2];
 
     /* convert coordinates back to whatever up is according to model/options */
-    fromZup->TransformPoint(newPos.data(), newPos.data());
-    fromZup->TransformPoint(foc.data(), foc.data());
+    fromZup->MultiplyPoint(newPos.data(), newPos.data());
+    fromZup->MultiplyPoint(foc.data(), foc.data());
 
     /* set camera coordinates back */
     cam.setPosition(newPos);
