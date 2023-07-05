@@ -133,7 +133,7 @@ public:
         break;
       case ViewType::VT_TOP:
         axis = { 0, +1, 0 };
-        up  =  { 0, -1, 0 };
+        up = { 0, -1, 0 };
         break;
       case ViewType::VT_ISOMETRIC:
         axis = { -1, +1, +1 };
