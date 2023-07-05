@@ -78,7 +78,7 @@ public:
   //----------------------------------------------------------------------------
   // Method defined to normalize the Z axis so all models are treated temporarily
   // as Z-up axis models.
-  void zUpTransforms(vtkMatrix3x3* to, vtkMatrix3x3* from)
+  void ToEnvironmentSpace(vtkMatrix3x3* transform)
   {
     vtkRenderer* renderer =
       this->VTKInteractor->GetRenderWindow()->GetRenderers()->GetFirstRenderer();
@@ -91,9 +91,7 @@ public:
       fwd[0], fwd[1], fwd[2],       //
       up[0], up[1], up[2],          //
     };
-    to->DeepCopy(m);
-    from->DeepCopy(m);
-    from->Transpose();
+    transform->DeepCopy(m);
   }
 
   //----------------------------------------------------------------------------
@@ -107,17 +105,13 @@ public:
   };
   static void SetViewOrbit(ViewType view, internals* self)
   {
-    vtkNew<vtkMatrix3x3> toZup, fromZup;
-    self->zUpTransforms(toZup, fromZup);
+    vtkNew<vtkMatrix3x3> transform;
+    self->ToEnvironmentSpace(transform);
     camera& cam = self->Window.getCamera();
     vector3_t up = { 0, 0, 1 };
     point3_t pos = cam.getPosition();
     point3_t foc = cam.getFocalPoint();
     point3_t axis, newPos;
-
-    /* convert coords to +Z up */
-    toZup->MultiplyPoint(pos.data(), pos.data());
-    toZup->MultiplyPoint(foc.data(), foc.data());
 
     const double dx = foc[0] - pos[0];
     const double dy = foc[1] - pos[1];
@@ -126,34 +120,31 @@ public:
     switch (view)
     {
       case ViewType::VT_FRONT:
-        axis = { 0, 0, +1 };
+        axis = { 0, +1, 0 };
         break;
       case ViewType::VT_RIGHT:
         axis = { +1, 0, 0 };
         break;
       case ViewType::VT_TOP:
-        axis = { 0, +1, 0 };
+        axis = { 0, 0, +1 };
         up = { 0, -1, 0 };
         break;
       case ViewType::VT_ISOMETRIC:
-        axis = { -1, +1, +1 };
+        double oneThirdRoot = sqrt(1.0 / 3.0);
+        axis = { -oneThirdRoot, +oneThirdRoot, +oneThirdRoot };
         break;
     }
-    fromZup->MultiplyPoint(up.data(), up.data());
-    fromZup->MultiplyPoint(axis.data(), axis.data());
+
+    transform->MultiplyPoint(up.data(), up.data());
+    transform->MultiplyPoint(axis.data(), axis.data());
 
     newPos[0] = foc[0] + radius * axis[0];
     newPos[1] = foc[1] + radius * axis[1];
     newPos[2] = foc[2] + radius * axis[2];
 
-    /* convert coordinates back to whatever up is according to model/options */
-    fromZup->MultiplyPoint(newPos.data(), newPos.data());
-    fromZup->MultiplyPoint(foc.data(), foc.data());
-
     /* set camera coordinates back */
     cam.setPosition(newPos);
     cam.setViewUp(up);
-    cam.resetToBounds(0.9);
   }
 
   static void OnKeyPress(vtkObject*, unsigned long, void* clientData, void*)
