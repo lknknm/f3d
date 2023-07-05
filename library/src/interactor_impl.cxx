@@ -101,9 +101,7 @@ public:
   enum class ViewType
   {
     VT_FRONT,
-    VT_BACK,
     VT_RIGHT,
-    VT_LEFT,
     VT_TOP,
     VT_ISOMETRIC
   };
@@ -115,7 +113,7 @@ public:
     vector3_t up = { 0, 0, 1 };
     point3_t pos = cam.getPosition();
     point3_t foc = cam.getFocalPoint();
-    point3_t Axis, newPos;
+    point3_t axis, newPos;
 
     /* convert coords to +Z up */
     toZup->MultiplyPoint(pos.data(), pos.data());
@@ -128,34 +126,25 @@ public:
     switch (view)
     {
       case ViewType::VT_FRONT:
-        Axis = { 0, 0, 1 };
-        fromZup->MultiplyPoint(up.data(), up.data());
-        break;
-      case ViewType::VT_BACK:
-        Axis = { 0, 0, -1 };
-        fromZup->MultiplyPoint(up.data(), up.data());
+        axis = { 0, 0, +1 };
         break;
       case ViewType::VT_RIGHT:
-        Axis = { 1, 0, 0 };
-        fromZup->MultiplyPoint(up.data(), up.data());
-        break;
-      case ViewType::VT_LEFT:
-        Axis = { -1, 0, 0 };
-        fromZup->MultiplyPoint(up.data(), up.data());
+        axis = { +1, 0, 0 };
         break;
       case ViewType::VT_TOP:
-        Axis = { 0, 1, 0 };
+        axis = { 0, +1, 0 };
+        up  =  { 0, -1, 0 };
         break;
       case ViewType::VT_ISOMETRIC:
-        Axis = { -1, 1, 1 };
-        fromZup->MultiplyPoint(up.data(), up.data());
+        axis = { -1, +1, +1 };
         break;
     }
+    fromZup->MultiplyPoint(up.data(), up.data());
+    fromZup->MultiplyPoint(axis.data(), axis.data());
 
-    fromZup->MultiplyPoint(Axis.data(), Axis.data());
-    newPos[0] = foc[0] + radius * Axis[0];
-    newPos[1] = foc[1] + radius * Axis[1];
-    newPos[2] = foc[2] + radius * Axis[2];
+    newPos[0] = foc[0] + radius * axis[0];
+    newPos[1] = foc[1] + radius * axis[1];
+    newPos[2] = foc[2] + radius * axis[2];
 
     /* convert coordinates back to whatever up is according to model/options */
     fromZup->MultiplyPoint(newPos.data(), newPos.data());
